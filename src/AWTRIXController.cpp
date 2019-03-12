@@ -336,21 +336,22 @@ void setup()
 
 void loop()
 {
- ArduinoOTA.handle();
+  ArduinoOTA.handle();
 
- if (!updating) {
-
- while (Serial.available () > 0) {
-	 String input = Serial.readStringUntil('}');
-	processing(input+"}");
- }
-
+  if (!updating) {
+		while (Serial.available () > 0) {
+			String message = Serial.readStringUntil('}');
+			Serial.println(message);
+			processing(message);
+			//long length = message.substring(0, 4).toInt();
+		}
+		
 		if(isr_flag == 1 && GESTURE) {
-    detachInterrupt(APDS9960_INT);
-    handleGesture();
-    isr_flag = 0;
-    attachInterrupt(APDS9960_INT, interruptRoutine, FALLING);
-  }
- }
- }
+			detachInterrupt(APDS9960_INT);
+			handleGesture();
+			isr_flag = 0;
+			attachInterrupt(APDS9960_INT, interruptRoutine, FALLING);
+		}
+	}
+}
 
