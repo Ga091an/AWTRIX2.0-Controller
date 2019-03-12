@@ -10,7 +10,7 @@
 #include <Wire.h>
 #include <SparkFun_APDS9960.h>
 
-String version = "0.4"; 
+String version = "0.4 USB"; 
 
 #include "awtrix-conf.h"
 
@@ -206,12 +206,16 @@ void processing(String cmd)
 		root["getIP"] =WiFi.localIP().toString();
 		String JS;
 		root.printTo(JS);
-		Serial.println("matrixInfo%" + String(JS));
+		Serial.println(String(JS));
 	}
 	else if (type.equals("getLUX"))
 	{
 		StaticJsonBuffer<200> jsonBuffer;
-		Serial.println("matrixLux%" + String(photocell.getCurrentLux()));
+		JsonObject& root = jsonBuffer.createObject();
+		root["LUX"] = photocell.getCurrentLux();
+		String JS;
+		root.printTo(JS);
+		Serial.println(String(JS));
 	}
 }
 
@@ -223,28 +227,33 @@ void interruptRoutine() {
 
 void handleGesture() {
     if (apds.isGestureAvailable()) {
+				StaticJsonBuffer<200> jsonBuffer;
+		JsonObject& root = jsonBuffer.createObject();
     switch ( apds.readGesture() ) {
       case DIR_UP:
-       Serial.write("control%UP");
+       root["control"] = "UP";
         break;
       case DIR_DOWN:
-        Serial.write("control%DOWN");
+        root["control"] = "DOWN";
         break;
       case DIR_LEFT:
-    Serial.write("control%LEFT");
+    root["control"] = "LEFT";
         break;
       case DIR_RIGHT:
-       Serial.write("control%RIGHT");
+        root["control"] = "RIGHT";
         break;
       case DIR_NEAR:
-         Serial.write("control%NEAR");
+          root["control"] = "NEAR";
         break;
       case DIR_FAR:
-       Serial.write("control%FAR");
+      root["control"] = "FAR";
         break;
       default:
-        Serial.write("control%NONE");
+        root["control"] = "NONE";
     }
+		String JS;
+		root.printTo(JS);
+		Serial.println(String(JS));
   }
 }
 
@@ -322,7 +331,7 @@ void setup()
     });
 
     ArduinoOTA.begin();
-
+ Serial.println("ready");
 }
 
 void loop()
@@ -331,19 +340,17 @@ void loop()
 
  if (!updating) {
 
-if (Serial.available() > 0) {
+ while (Serial.available () > 0) {
+	 String input = Serial.readStringUntil('}');
+	processing(input+"}");
+ }
 
-incomingCommand = Serial.read(); // read the incoming byte:
-processing(incomingCommand);
-Serial.print("Command received:");
-Serial.println(incomingCommand);
-}
 		if(isr_flag == 1 && GESTURE) {
     detachInterrupt(APDS9960_INT);
     handleGesture();
     isr_flag = 0;
     attachInterrupt(APDS9960_INT, interruptRoutine, FALLING);
   }
-	
  }
-}
+ }
+

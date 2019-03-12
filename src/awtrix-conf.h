@@ -1,8 +1,8 @@
 ///////////////////////// AWTRIX CONFIG /////////////////////////
 
 // Wifi Config
-const char *ssid = "xxxxx";
-const char *password = "xxxxx";
+const char *ssid = "DAP";
+const char *password = "EVA2012dm";
 char *awtrix_server = "192.168.178.39";
 
 /// LDR Config
