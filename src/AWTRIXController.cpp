@@ -1,7 +1,5 @@
 #include <ArduinoOTA.h>
 #include <ESP8266WiFi.h>
-#include <WiFiClient.h>
-#include <PubSubClient.h>
 #include <FS.h>
 #include <ArduinoJson.h>
 #include <Adafruit_GFX.h>
@@ -18,9 +16,9 @@ String version = "0.4";
 
 //////////////////////////////////////////////////////////////
 //////////////////////// Don't touch /////////////////////////
-char *topics = "awtrixmatrix/";
 #define NUMMATRIX (32 * 8)
 CRGB leds[NUMMATRIX];
+String incomingCommand;
 
 #ifdef MATRIX_MODEV2
 FastLED_NeoMatrix *matrix = new FastLED_NeoMatrix(leds, 32, 8, NEO_MATRIX_TOP + NEO_MATRIX_LEFT + NEO_MATRIX_ROWS + NEO_MATRIX_ZIGZAG);
@@ -29,8 +27,6 @@ FastLED_NeoMatrix *matrix = new FastLED_NeoMatrix(leds, 32, 8, NEO_MATRIX_TOP + 
 FastLED_NeoMatrix *matrix = new FastLED_NeoMatrix(leds, 32, 8, NEO_MATRIX_TOP + NEO_MATRIX_LEFT + NEO_MATRIX_COLUMNS + NEO_MATRIX_ZIGZAG);
 #endif
 
-WiFiClient espClient;
-PubSubClient client(espClient);
 LightDependentResistor photocell(LDR_PIN, LDR_RESISTOR, LDR_PHOTOCELL);
 SparkFun_APDS9960 apds = SparkFun_APDS9960();
 
@@ -110,27 +106,22 @@ int GetRSSIasQuality(int rssi)
 }
 
 
-void callback(char *topic, byte *payload, unsigned int length)
+void processing(String cmd)
 {
-	String s_payload = String((char *)payload);
-
-
-	String s_topic = String(topic);
-	int last = s_topic.lastIndexOf("/") + 1;
-	String channel = s_topic.substring(last);
-
 	DynamicJsonBuffer jsonBuffer;
-	JsonObject &json = jsonBuffer.parseObject(s_payload);
+	JsonObject &json = jsonBuffer.parseObject(cmd);
 
-	if (channel.equals("show"))
+		String type = json["type"];
+
+	if (type.equals("show"))
 	{
 		matrix->show();
 	}
-	else if (channel.equals("clear"))
+	else if (type.equals("clear"))
 	{
 		matrix->clear();
 	}
-	else if (channel.equals("drawText"))
+	else if (type.equals("drawText"))
 	{
 		if (json["font"].as<String>().equals("big"))
 		{
@@ -147,7 +138,7 @@ void callback(char *topic, byte *payload, unsigned int length)
 		
 		matrix->print(utf8ascii(text));
 	}
-	else if (channel.equals("drawBMP"))
+	else if (type.equals("drawBMP"))
 	{
 		int16_t h = json["height"].as<int16_t>();
 		int16_t w = json["width"].as<int16_t>();
@@ -162,31 +153,31 @@ void callback(char *topic, byte *payload, unsigned int length)
 			}
 		}
 	}
-	else if (channel.equals("drawLine"))
+	else if (type.equals("drawLine"))
 	{
 		matrix->drawLine(json["x0"].as<int16_t>(), json["y0"].as<int16_t>(), json["x1"].as<int16_t>(), json["y1"].as<int16_t>(), matrix->Color(json["color"][0].as<int16_t>(), json["color"][1].as<int16_t>(), json["color"][2].as<int16_t>()));
 	}
-	else if (channel.equals("drawCircle"))
+	else if (type.equals("drawCircle"))
 	{
 		matrix->drawCircle(json["x0"].as<int16_t>(), json["y0"].as<int16_t>(), json["r"].as<int16_t>(), matrix->Color(json["color"][0].as<int16_t>(), json["color"][1].as<int16_t>(), json["color"][2].as<int16_t>()));
 	}
-	else if (channel.equals("drawRect"))
+	else if (type.equals("drawRect"))
 	{
 		matrix->drawRect(json["x"].as<int16_t>(), json["y"].as<int16_t>(), json["w"].as<int16_t>(), json["h"].as<int16_t>(), matrix->Color(json["color"][0].as<int16_t>(), json["color"][1].as<int16_t>(), json["color"][2].as<int16_t>()));
 	}
-		else if (channel.equals("fill"))
+		else if (type.equals("fill"))
 	{
 		matrix->fillScreen(matrix->Color(json["color"][0].as<int16_t>(), json["color"][1].as<int16_t>(), json["color"][2].as<int16_t>()));
 	}
-	else if (channel.equals("drawPixel"))
+	else if (type.equals("drawPixel"))
 	{
 		matrix->drawPixel(json["x"].as<int16_t>(), json["y"].as<int16_t>(), matrix->Color(json["color"][0].as<int16_t>(), json["color"][1].as<int16_t>(), json["color"][2].as<int16_t>()));
 	}
-	else if (channel.equals("setBrightness"))
+	else if (type.equals("setBrightness"))
 	{
 		matrix->setBrightness(json["brightness"].as<int16_t>());
 	}
-	else if (channel.equals("speedtest"))
+	else if (type.equals("speedtest"))
 	{
 		matrix->setFont(&TomThumb);
 		matrix->setCursor(0, 7);
@@ -204,7 +195,7 @@ void callback(char *topic, byte *payload, unsigned int length)
 		matrix->print(duration);
 		startTime = millis();
 	}
-	else if (channel.equals("getMatrixInfo"))
+	else if (type.equals("getMatrixInfo"))
 	{
 		StaticJsonBuffer<200> jsonBuffer;
 		JsonObject& root = jsonBuffer.createObject();
@@ -215,39 +206,15 @@ void callback(char *topic, byte *payload, unsigned int length)
 		root["getIP"] =WiFi.localIP().toString();
 		String JS;
 		root.printTo(JS);
-		client.publish("matrixInfo", JS.c_str());
+		Serial.println("matrixInfo%" + String(JS));
 	}
-	else if (channel.equals("getLUX"))
+	else if (type.equals("getLUX"))
 	{
 		StaticJsonBuffer<200> jsonBuffer;
-		client.publish("matrixLux", String(photocell.getCurrentLux()).c_str());
+		Serial.println("matrixLux%" + String(photocell.getCurrentLux()));
 	}
 }
 
-void reconnect()
-{
-	// Loop until we're reconnected
-	while (!client.connected())
-	{
-		// Attempt to connect
-
-		String clientId = "AWTRIXController-";
-    clientId += String(random(0xffff), HEX);
-
-		if (client.connect(clientId.c_str()))
-		{
-			// ... and resubscribe
-			client.subscribe((String(topics) + "#").c_str());
-			// ... and publish
-			client.publish("matrixstate", "connected");
-		}
-		else
-		{
-			// Wait 5 seconds before retrying
-			delay(5000);
-		}
-	}
-}
 
 
 void interruptRoutine() {
@@ -258,25 +225,25 @@ void handleGesture() {
     if (apds.isGestureAvailable()) {
     switch ( apds.readGesture() ) {
       case DIR_UP:
-        client.publish("control", "UP");
+       Serial.write("control%UP");
         break;
       case DIR_DOWN:
-        client.publish("control", "DOWN");
+        Serial.write("control%DOWN");
         break;
       case DIR_LEFT:
-     client.publish("control", "LEFT");
+    Serial.write("control%LEFT");
         break;
       case DIR_RIGHT:
-       client.publish("control", "RIGHT");
+       Serial.write("control%RIGHT");
         break;
       case DIR_NEAR:
-         client.publish("control", "NEAR");
+         Serial.write("control%NEAR");
         break;
       case DIR_FAR:
-        client.publish("control", "FAR");
+       Serial.write("control%FAR");
         break;
       default:
-        client.publish("control", "NONE");
+        Serial.write("control%NONE");
     }
   }
 }
@@ -312,6 +279,7 @@ void flashProgress(unsigned int progress, unsigned int total) {
 
 void setup()
 {
+	Serial.begin(921600);
 	FastLED.addLeds<NEOPIXEL, MATRIX_PIN>(leds, NUMMATRIX).setCorrection(TypicalLEDStrip);
 	WiFi.mode(WIFI_STA);
 	WiFi.begin(ssid, password);
@@ -327,16 +295,13 @@ void setup()
 		delay(500);
 	}
 
-
 	photocell.setPhotocellPositionOnGround(false);
-	
+
 	matrix->clear();
 	matrix->setCursor(6, 6);
 	matrix->print("Ready!");
 	matrix->show();
 
-	client.setServer(awtrix_server, 7001);
-	client.setCallback(callback);
 
 
 #if GESTURE
@@ -365,17 +330,20 @@ void loop()
  ArduinoOTA.handle();
 
  if (!updating) {
-	if (!client.connected())
-	{
-		reconnect();
-	}else{
+
+if (Serial.available() > 0) {
+
+incomingCommand = Serial.read(); // read the incoming byte:
+processing(incomingCommand);
+Serial.print("Command received:");
+Serial.println(incomingCommand);
+}
 		if(isr_flag == 1 && GESTURE) {
     detachInterrupt(APDS9960_INT);
     handleGesture();
     isr_flag = 0;
     attachInterrupt(APDS9960_INT, interruptRoutine, FALLING);
   }
-		client.loop();
-	}
+	
  }
 }
