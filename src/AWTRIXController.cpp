@@ -334,18 +334,46 @@ void setup()
  Serial.println("ready");
 }
 
+bool check(char* msg,String payload) {
+  uint32_t length = (msg[0] << 24) ^ (msg[1] << 16) ^ (msg[2] << 8) ^ msg[3];
+  uint32_t originalChecksum = (msg[4] << 24) ^ (msg[5] << 16) ^ (msg[6] << 8) ^ msg[7];
+	
+  uint32_t payloadLength = payload.length();
+	Serial.println(payload);
+  if (length != payloadLength) return false;
+
+  uint32_t checksum = 0;
+  for (int i = 0; i < payloadLength; i++) {
+    byte left = (4 - i % 4 - 1) * 8;
+    checksum += payload.charAt(i) << left;
+  }
+
+  return checksum == originalChecksum;
+}
+
+String content = "";
+  char character;
+
+
 void loop()
 {
   ArduinoOTA.handle();
 
   if (!updating) {
+
 		while (Serial.available () > 0) {
-			String message = Serial.readStringUntil('}');
-			Serial.println(message);
-			processing(message);
-			//long length = message.substring(0, 4).toInt();
+//			char header [8];
+//			Serial.read(header,8);
+//     	String message= Serial.readStringUntil('}').substring(8)+"}";
+String message= Serial.readStringUntil('}')+"}";
+//				if (check(header,message)) {
+//					Serial.print("ACK");
+					processing(message);
+//				}else{
+//					Serial.print("false");
+				};
 		}
-		
+
 		if(isr_flag == 1 && GESTURE) {
 			detachInterrupt(APDS9960_INT);
 			handleGesture();
@@ -353,5 +381,4 @@ void loop()
 			attachInterrupt(APDS9960_INT, interruptRoutine, FALLING);
 		}
 	}
-}
 
