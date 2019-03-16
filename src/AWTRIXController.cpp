@@ -11,10 +11,9 @@
 #include <SparkFun_APDS9960.h>
 #include "SoftwareSerial.h"
 #include "DFRobotDFPlayerMini.h"
-SoftwareSerial mySoftwareSerial(13, 15); // RX, TX
-DFRobotDFPlayerMini myDFPlayer;
 
-String version = "0.4 USB"; 
+
+String version = "0.5 USB"; 
 
 #include "awtrix-conf.h"
 
@@ -33,7 +32,8 @@ FastLED_NeoMatrix *matrix = new FastLED_NeoMatrix(leds, 32, 8, NEO_MATRIX_TOP + 
 
 LightDependentResistor photocell(LDR_PIN, LDR_RESISTOR, LDR_PHOTOCELL);
 SparkFun_APDS9960 apds = SparkFun_APDS9960();
-
+SoftwareSerial mySoftwareSerial(13, 15); // RX, TX
+DFRobotDFPlayerMini myDFPlayer;
 
 unsigned long startTime = 0;
 unsigned long endTime = 0;
@@ -181,10 +181,10 @@ void processing(String cmd)
 	{
 		matrix->setBrightness(json["brightness"].as<int16_t>());
 	}
-		else if (type.equals("playmp3"))
+		else if (type.equals("play"))
 	{
- 	 myDFPlayer.playMp3Folder(json["file"].as<int16_t>());
-		delay(1000);
+	myDFPlayer.volume(json["vol"].as<int8>());
+ 	myDFPlayer.playFolder(json["folder"].as<int8>(),json["file"].as<int8>());
 	}
 	else if (type.equals("speedtest"))
 	{
